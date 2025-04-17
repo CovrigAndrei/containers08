@@ -1,8 +1,8 @@
 <?php
 require_once __DIR__ . '/testframework.php';
-require_once __DIR__ . '/../site/config.php';
-require_once __DIR__ . '/../site/modules/database.php';
-require_once __DIR__ . '/../site/modules/page.php';
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../modules/database.php';
+require_once __DIR__ . '/../modules/page.php';
 
 $testFramework = new TestFramework();
 
@@ -85,7 +85,7 @@ function testDbDelete() {
 
 // Test 7: Verificarea metodei Render din clasa Page
 function testPageRender() {
-    $page = new Page(__DIR__ . '/../site/templates/index.tpl');
+    $page = new Page(__DIR__ . '/../templates/index.tpl');
     $data = ['title' => 'Test Title', 'content' => 'Test Content'];
     $output = $page->Render($data);
     return assertExpression(
@@ -95,7 +95,7 @@ function testPageRender() {
     );
 }
 
-// Adăugarea testelor (corrected from $tests to $testFramework)
+// Adăugarea testelor
 $testFramework->add('Database connection', 'testDbConnection');
 $testFramework->add('Table count', 'testDbCount');
 $testFramework->add('Data create', 'testDbCreate');
