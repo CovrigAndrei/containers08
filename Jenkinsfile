@@ -1,6 +1,6 @@
 pipeline {
     agent {
-        label 'php-agent'
+        label 'php-agent' // agentul configurat anterior
     }
 
     environment {
@@ -8,27 +8,46 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                echo 'Clonarea proiectului din GitHub...'
+                echo 'Clonarea codului sursă din GitHub...'
                 checkout scm
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Prepare Environment') {
             steps {
-                echo 'Construirea imaginii Docker pentru aplicația PHP...'
-                sh 'docker build -t containers08-app .'
+                echo 'Pregătirea mediului PHP...'
+                sh '''
+                    php -v
+                    echo "Verificarea structurii proiectului..."
+                    ls -R site
+                '''
+            }
+        }
+
+        stage('Database Setup') {
+            steps {
+                echo 'Crearea bazei de date SQLite...'
+                sh '''
+                    if [ ! -f $DB_PATH ]; then
+                        mkdir -p /var/www/db
+                        cat sql/schema.sql | sqlite3 $DB_PATH
+                        chmod 777 $DB_PATH
+                        echo "Baza de date creată cu succes."
+                    else
+                        echo "Baza de date există deja."
+                    fi
+                '''
             }
         }
 
         stage('Run Tests') {
             steps {
-                echo 'Rularea testelor unitare din /tests/tests.php...'
-                // pornim containerul cu imaginea tocmai creată
+                echo 'Rularea testelor unitare...'
                 sh '''
-                    docker run --rm -v $(pwd)/tests:/var/www/tests containers08-app \
-                    php /var/www/tests/tests.php
+                    php tests/tests.php
                 '''
             }
         }
@@ -36,13 +55,13 @@ pipeline {
 
     post {
         always {
-            echo 'Pipeline încheiat.'
+            echo 'Pipeline finalizat.'
         }
         success {
-            echo 'Toate etapele s-au executat cu succes!'
+            echo 'Toate etapele s-au finalizat cu succes!'
         }
         failure {
-            echo 'Au apărut erori în pipeline.'
+            echo 'A apărut o eroare în timpul execuției pipeline-ului.'
         }
     }
 }
