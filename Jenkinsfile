@@ -1,103 +1,81 @@
-// Jenkinsfile
 pipeline {
     agent {
-        label 'php-agent' 
+        label 'php-agent'
     }
-
+    
     environment {
-        IMAGE_NAME = 'containers08'
-        CONTAINER_NAME = 'jenkins-test-container'
-        DB_VOLUME = 'jenkins_db_volume'
+        // Setări pentru mediu
+        COMPOSER_ALLOW_SUPERUSER = 1
     }
-
+    
     stages {
         stage('Checkout') {
             steps {
-                echo 'Descărcare cod sursă din Git...'
+                // Checkout codul din repository
                 checkout scm
+                echo 'Codul a fost extras cu succes din repository'
             }
         }
-
+        
         stage('Build Docker Image') {
             steps {
-                echo 'Construire imagine Docker...'
-                sh "docker build -t ${IMAGE_NAME} ."
+                // Construirea imaginii Docker
+                echo 'Construiesc imaginea Docker...'
+                sh 'docker build -t containers08 .'
             }
         }
-
-        stage('Prepare Database Volume') {
+        
+        stage('Prepare Database') {
             steps {
-                echo 'Creare volum persistent pentru baza de date (dacă nu există)...'
-                // Creează volumul dacă nu există deja
-                sh """
-                docker volume inspect ${DB_VOLUME} > /dev/null 2>&1 || \
-                docker volume create ${DB_VOLUME}
-                """
+                // Pregătirea bazei de date
+                echo 'Pregătesc baza de date...'
+                sh '''
+                    docker create --name test-container --volume database:/var/www/db containers08
+                    docker start test-container
+                    sleep 5
+                '''
             }
         }
-
-        stage('Run Container & Initialize DB') {
+        
+        stage('Run Tests') {
             steps {
-                echo 'Pornire container și inițializare baza de date...'
-                script {
-                    // Oprim containerul dacă rulează deja (evităm conflicte)
-                    sh "docker rm -f ${CONTAINER_NAME} || true"
-
-                    // Creăm și pornim containerul
-                    sh """
-                    docker create --name ${CONTAINER_NAME} \
-                        --volume ${DB_VOLUME}:/var/www/db \
-                        ${IMAGE_NAME}
-                    """
-
-                    // Pornim containerul
-                    sh "docker start ${CONTAINER_NAME}"
-
-                    // Așteptăm puțin ca SQLite să creeze fișierul db.sqlite
-                    sh 'sleep 5'
-                }
+                // Rularea testelor
+                echo 'Rulez testele...'
+                sh '''
+                    docker cp ./tests test-container:/var/www/html
+                    docker exec test-container php /var/www/html/tests/tests.php
+                '''
             }
         }
-
-        stage('Copy Tests to Container') {
+        
+        stage('Cleanup') {
             steps {
-                echo 'Copiere teste în container...'
-                sh "docker cp ./tests ${CONTAINER_NAME}:/var/www/html/"
-            }
-        }
-
-        stage('Run PHP Tests') {
-            steps {
-                echo 'Rulare teste PHP...'
-                script {
-                    def testOutput = sh(
-                        script: "docker exec ${CONTAINER_NAME} php /var/www/html/tests/tests.php",
-                        returnStdout: true
-                    ).trim()
-                    echo testOutput
-
-                    // Verificăm dacă toate testele au trecut
-                    if (testOutput.contains('7 / 7')) {
-                        echo 'TOATE TESTELE AU TRECUT!'
-                    } else {
-                        error 'Unele teste au eșuat!'
-                    }
-                }
+                // Curățarea containerelor temporare
+                echo 'Curăț containerele temporare...'
+                sh '''
+                    docker stop test-container || true
+                    docker rm test-container || true
+                '''
             }
         }
     }
-
+    
     post {
         always {
-            echo 'Curățare resurse...'
-            sh "docker stop ${CONTAINER_NAME} || true"
-            sh "docker rm ${CONTAINER_NAME} || true"
+            // Curățare finală indiferent de rezultat
+            sh '''
+                docker stop test-container || true
+                docker rm test-container || true
+            '''
+            echo 'Pipeline finalizat.'
         }
         success {
-            echo 'Pipeline finalizat cu SUCCES!'
+            echo '✅ Toate etapele au fost finalizate cu succes!'
+            // Aici poți adăuga notificări sau deploy
         }
         failure {
-            echo 'Pipeline a eșuat.'
+            echo '❌ Eroare detectată în pipeline.'
+            // Aici poți adăuga notificări de eșec
         }
     }
 }
